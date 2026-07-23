@@ -7,6 +7,16 @@
     <link rel="stylesheet" href="style.css">
   </head>
   <body>
-    <main>{{content}}</main>
+    <main>
+      <nav aria-label="Site navigation"><a href="index.html">All notes</a></nav>
+      <article>
+        <h1>{{title}}</h1>
+        {{content}}
+      </article>
+      <section aria-labelledby="linked-mentions-heading">
+        <h2 id="linked-mentions-heading">Linked mentions</h2>
+        {{backlinks}}
+      </section>
+    </main>
   </body>
 </html>

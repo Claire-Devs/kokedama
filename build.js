@@ -141,6 +141,43 @@ function renderNoteBodies(notes) {
   return notes;
 }
 
+function renderBacklinks(backlinks) {
+  if (backlinks.length === 0) {
+    return "<p>No linked mentions.</p>";
+  }
+
+  const items = backlinks
+    .map(
+      (backlink) =>
+        `<li><a href="${escapeHtml(backlink.outputFilename)}">${escapeHtml(backlink.title)}</a></li>`,
+    )
+    .join("\n");
+
+  return `<ul>\n${items}\n</ul>`;
+}
+
+function renderNotePage(note, template) {
+  return template
+    .replace(/{{title}}/g, escapeHtml(note.title))
+    .replace("{{content}}", note.renderedBody)
+    .replace("{{backlinks}}", renderBacklinks(note.backlinks));
+}
+
+async function renderNotePages(notes, templatePath = path.join(__dirname, "templates", "page.html")) {
+  let template;
+  try {
+    template = await fs.readFile(templatePath, "utf8");
+  } catch (error) {
+    throw new Error(`Could not read page template "${templatePath}": ${error.message}`);
+  }
+
+  for (const note of notes) {
+    note.renderedPage = renderNotePage(note, template);
+  }
+
+  return notes;
+}
+
 async function readNotes(notesDirectory) {
   const resolvedDirectory = path.resolve(notesDirectory);
 
@@ -177,7 +214,8 @@ async function readNotes(notesDirectory) {
 
   const preparedNotes = assignOutputFilenames(notes);
   computeBacklinks(preparedNotes);
-  return renderNoteBodies(preparedNotes);
+  renderNoteBodies(preparedNotes);
+  return renderNotePages(preparedNotes);
 }
 
 async function main() {
@@ -209,6 +247,9 @@ module.exports = {
   normalizeLookupKey,
   parseNote,
   readNotes,
+  renderBacklinks,
+  renderNotePage,
+  renderNotePages,
   renderNoteBodies,
   renderNoteBody,
 };
