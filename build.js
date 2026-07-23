@@ -6,6 +6,7 @@ const { marked } = require("marked");
 
 const WIKILINK_PATTERN = /\[\[([^\]]+)\]\]/g;
 const LEVEL_ONE_HEADING_PATTERN = /^(?: {0,3})#\s+(.+?)(?:\s+#+)?\s*$/m;
+const TAG_PATTERN = /(?:^|[^a-z0-9_/-])#([a-z0-9][a-z0-9_-]*)\b/gi;
 
 function outputStem(title) {
   const safeStem = title
@@ -18,6 +19,16 @@ function outputStem(title) {
 
 function extractWikilinks(markdown) {
   return Array.from(markdown.matchAll(WIKILINK_PATTERN), ([, label]) => label);
+}
+
+function extractTags(markdown) {
+  const tags = new Set();
+
+  for (const [, tag] of markdown.matchAll(TAG_PATTERN)) {
+    tags.add(tag.toLowerCase());
+  }
+
+  return [...tags].sort((left, right) => left.localeCompare(right));
 }
 
 function normalizeLookupKey(value) {
@@ -50,6 +61,7 @@ function parseNote(filename, fullPath, rawMarkdown) {
     title,
     body,
     wikilinks: extractWikilinks(rawMarkdown),
+    tags: extractTags(rawMarkdown),
   };
 }
 
@@ -141,6 +153,52 @@ function renderNoteBodies(notes) {
   return notes;
 }
 
+function resolveOutgoingLinks(note, lookup) {
+  const resolved = [];
+  const unresolved = [];
+  const resolvedFilenames = new Set();
+  const unresolvedLabels = new Set();
+
+  for (const label of note.wikilinks) {
+    const target = lookup.get(normalizeLookupKey(label));
+
+    if (target) {
+      if (!resolvedFilenames.has(target.filename)) {
+        resolvedFilenames.add(target.filename);
+        resolved.push(target);
+      }
+    } else if (!unresolvedLabels.has(label)) {
+      unresolvedLabels.add(label);
+      unresolved.push(label);
+    }
+  }
+
+  return { resolved, unresolved };
+}
+
+function tagFilename(tag) {
+  return `tag-${tag}.html`;
+}
+
+function buildTagIndex(notes) {
+  const tags = new Map();
+
+  for (const note of notes) {
+    for (const tag of note.tags) {
+      if (!tags.has(tag)) {
+        tags.set(tag, []);
+      }
+      tags.get(tag).push(note);
+    }
+  }
+
+  for (const taggedNotes of tags.values()) {
+    taggedNotes.sort((left, right) => left.title.localeCompare(right.title) || left.filename.localeCompare(right.filename));
+  }
+
+  return tags;
+}
+
 function renderBacklinks(backlinks) {
   if (backlinks.length === 0) {
     return "<p>No linked mentions.</p>";
@@ -156,10 +214,21 @@ function renderBacklinks(backlinks) {
   return `<ul>\n${items}\n</ul>`;
 }
 
+function renderTags(tags) {
+  if (tags.length === 0) {
+    return "<p>No tags.</p>";
+  }
+
+  return `<ul class="tags">\n${tags
+    .map((tag) => `  <li><a href="${escapeHtml(tagFilename(tag))}">#${escapeHtml(tag)}</a></li>`)
+    .join("\n")}\n</ul>`;
+}
+
 function renderNotePage(note, template) {
   return template
     .replace(/{{title}}/g, escapeHtml(note.title))
     .replace("{{content}}", note.renderedBody)
+    .replace("{{tags}}", renderTags(note.tags))
     .replace("{{backlinks}}", renderBacklinks(note.backlinks));
 }
 
@@ -237,6 +306,100 @@ function renderIndexPage(notes) {
   <body>
     <main>
       <h1>All notes</h1>
+      <nav aria-label="Site navigation"><a href="graph.html">Link graph</a> <a href="tags.html">Tags</a></nav>
+      <ul>
+${items}
+      </ul>
+    </main>
+  </body>
+</html>
+`;
+}
+
+function renderGraphPage(notes) {
+  const lookup = buildNoteLookup(notes);
+  const graphItems = notes
+    .map((note) => {
+      const { resolved, unresolved } = resolveOutgoingLinks(note, lookup);
+      const resolvedLinks = resolved.length === 0
+        ? "<p>No outgoing links.</p>"
+        : `<ul>\n${resolved
+          .map((target) => `          <li><a href="${escapeHtml(target.outputFilename)}">${escapeHtml(target.title)}</a></li>`)
+          .join("\n")}\n        </ul>`;
+      const unresolvedLinks = unresolved.length === 0
+        ? ""
+        : `<p>Unresolved: ${unresolved.map((label) => `<span class="unresolved">${escapeHtml(label)}</span>`).join(", ")}</p>`;
+
+      return `      <li>\n        <a href="${escapeHtml(note.outputFilename)}">${escapeHtml(note.title)}</a>\n${resolvedLinks}\n        ${unresolvedLinks}\n      </li>`;
+    })
+    .join("\n");
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Link graph</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <main>
+      <nav aria-label="Site navigation"><a href="index.html">All notes</a> <a href="tags.html">Tags</a></nav>
+      <h1>Link graph</h1>
+      <p>Resolved outgoing links for each note.</p>
+      <ul class="link-graph">
+${graphItems}
+      </ul>
+    </main>
+  </body>
+</html>
+`;
+}
+
+function renderTagIndexPage(tagIndex) {
+  const items = [...tagIndex.entries()]
+    .map(([tag, notes]) => `          <li><a href="${escapeHtml(tagFilename(tag))}">#${escapeHtml(tag)}</a> (${notes.length})</li>`)
+    .join("\n");
+  const contents = items || "          <li>No tags found.</li>";
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Tags</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <main>
+      <nav aria-label="Site navigation"><a href="index.html">All notes</a> <a href="graph.html">Link graph</a></nav>
+      <h1>Tags</h1>
+      <ul>
+${contents}
+      </ul>
+    </main>
+  </body>
+</html>
+`;
+}
+
+function renderTagPage(tag, notes) {
+  const items = notes
+    .map((note) => `          <li><a href="${escapeHtml(note.outputFilename)}">${escapeHtml(note.title)}</a></li>`)
+    .join("\n");
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>#${escapeHtml(tag)}</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <main>
+      <nav aria-label="Site navigation"><a href="index.html">All notes</a> <a href="graph.html">Link graph</a> <a href="tags.html">Tags</a></nav>
+      <h1>#${escapeHtml(tag)}</h1>
       <ul>
 ${items}
       </ul>
@@ -274,6 +437,8 @@ async function writeSite(notes, outputDirectory, stylesheetPath = path.join(__di
     throw new Error(`Could not create output directory "${outputDirectory}": ${error.message}`);
   }
 
+  const tagIndex = buildTagIndex(notes);
+
   await clearGeneratedFiles(resolvedOutputDirectory);
 
   let stylesheet;
@@ -292,6 +457,18 @@ async function writeSite(notes, outputDirectory, stylesheetPath = path.join(__di
       path: path.join(resolvedOutputDirectory, "index.html"),
       content: renderIndexPage(notes),
     },
+    {
+      path: path.join(resolvedOutputDirectory, "graph.html"),
+      content: renderGraphPage(notes),
+    },
+    {
+      path: path.join(resolvedOutputDirectory, "tags.html"),
+      content: renderTagIndexPage(tagIndex),
+    },
+    ...[...tagIndex.entries()].map(([tag, taggedNotes]) => ({
+      path: path.join(resolvedOutputDirectory, tagFilename(tag)),
+      content: renderTagPage(tag, taggedNotes),
+    })),
     {
       path: path.join(resolvedOutputDirectory, "style.css"),
       content: stylesheet,
@@ -333,6 +510,7 @@ module.exports = {
   buildNoteLookup,
   computeBacklinks,
   escapeHtml,
+  extractTags,
   extractWikilinks,
   normalizeLookupKey,
   parseNote,
@@ -342,7 +520,14 @@ module.exports = {
   renderNotePages,
   renderNoteBodies,
   renderNoteBody,
+  resolveOutgoingLinks,
+  renderGraphPage,
   renderIndexPage,
+  renderTagIndexPage,
+  renderTagPage,
+  renderTags,
+  buildTagIndex,
+  tagFilename,
   clearGeneratedFiles,
   writeSite,
 };

@@ -8,8 +8,13 @@ const test = require("node:test");
 const {
   assignOutputFilenames,
   computeBacklinks,
+  extractTags,
   parseNote,
   readNotes,
+  renderGraphPage,
+  renderTagIndexPage,
+  renderTagPage,
+  renderTags,
   writeSite,
 } = require("../build.js");
 
@@ -55,6 +60,44 @@ test("renders unresolved wikilinks without creating backlinks", async () => {
   assert.deepEqual(target.backlinks, []);
 });
 
+test("extracts normalized unique inline tags without treating headings as tags", () => {
+  const tags = extractTags("# A heading\n\n#Garden #garden #soil-health #soil_health #123\n\nnot#a-tag");
+
+  assert.deepEqual(new Set(tags), new Set(["123", "garden", "soil-health", "soil_health"]));
+});
+
+test("renders tag links, indexes, and tag listings while supporting untagged notes", () => {
+  const tagged = parseNote("tagged.md", "/notes/tagged.md", "# Tagged\n\n#Garden #soil");
+  const untagged = parseNote("untagged.md", "/notes/untagged.md", "# Untagged\n\nContent");
+  const notes = assignOutputFilenames([tagged, untagged]);
+  const tagIndex = new Map([
+    ["garden", [tagged]],
+    ["soil", [tagged]],
+  ]);
+
+  assert.match(renderTags(tagged.tags), /href="tag-garden\.html">#garden/);
+  assert.equal(renderTags(untagged.tags), "<p>No tags.</p>");
+  assert.match(renderTagIndexPage(tagIndex), /href="tag-garden\.html">#garden<\/a> \(1\)/);
+  assert.match(renderTagPage("garden", [tagged]), /href="tagged\.html">Tagged/);
+});
+
+test("renders a static graph with resolved links, unresolved labels, and empty states", () => {
+  const source = parseNote("source.md", "/notes/source.md", "# Source\n\n[[Target]] [[Target]] [[Missing]]");
+  const target = parseNote("target.md", "/notes/target.md", "# Target\n\nContent");
+  const isolated = parseNote("isolated.md", "/notes/isolated.md", "# Isolated\n\nContent");
+  const notes = assignOutputFilenames([isolated, source, target]);
+
+  const graph = renderGraphPage(notes);
+
+  assert.match(graph, /<a href="source\.html">Source<\/a>/);
+  assert.match(graph, /<a href="target\.html">Target<\/a>/);
+  // The target appears once as its own node and once as Source's deduplicated outgoing edge.
+  assert.equal((graph.match(/href="target\.html"/g) || []).length, 2);
+  assert.match(graph, /<span class="unresolved">Missing<\/span>/);
+  assert.match(graph, /<a href="isolated\.html">Isolated<\/a>\n<p>No outgoing links\.<\/p>/);
+  assert.match(graph, /href="index\.html">All notes/);
+});
+
 test("generates safe, deterministic output filenames for collisions", () => {
   const notes = [
     { title: "A / Note" },
@@ -85,6 +128,29 @@ test("removes stale generated pages without removing unrelated output files", as
   await assert.rejects(fs.access(path.join(outputDirectory, "stale.html")));
   assert.equal(await fs.readFile(path.join(outputDirectory, "keep.txt"), "utf8"), "keep");
   await fs.access(path.join(outputDirectory, "fresh.html"));
+  await fs.access(path.join(outputDirectory, "graph.html"));
+  await fs.access(path.join(outputDirectory, "tags.html"));
+});
+
+test("writes navigable tag pages for tagged notes", async () => {
+  const notesDirectory = await makeTempDirectory("kokedama-tags-");
+  const outputDirectory = await makeTempDirectory("kokedama-tag-site-");
+  await fs.writeFile(path.join(notesDirectory, "first.md"), "# First\n\n#Garden #garden");
+  await fs.writeFile(path.join(notesDirectory, "second.md"), "# Second\n\n#GARDEN");
+  await fs.writeFile(path.join(notesDirectory, "third.md"), "# Third\n\nNo tags.");
+
+  await writeSite(await readNotes(notesDirectory), outputDirectory);
+
+  const tagIndex = await fs.readFile(path.join(outputDirectory, "tags.html"), "utf8");
+  const gardenPage = await fs.readFile(path.join(outputDirectory, "tag-garden.html"), "utf8");
+  const firstPage = await fs.readFile(path.join(outputDirectory, "first.html"), "utf8");
+  const thirdPage = await fs.readFile(path.join(outputDirectory, "third.html"), "utf8");
+
+  assert.equal((tagIndex.match(/tag-garden\.html/g) || []).length, 1);
+  assert.match(gardenPage, /href="first\.html">First/);
+  assert.match(gardenPage, /href="second\.html">Second/);
+  assert.match(firstPage, /href="tag-garden\.html">#garden/);
+  assert.match(thirdPage, /<p>No tags\.<\/p>/);
 });
 
 test("supports paths containing spaces and reports understandable CLI errors", async () => {

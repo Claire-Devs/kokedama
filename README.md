@@ -18,7 +18,7 @@ npm install
 node build.js ./sample-notes ./dist
 ```
 
-Open `dist/index.html` directly in a browser. The output directory contains `index.html`, one `.html` page per note, and `style.css`.
+Open `dist/index.html` directly in a browser. The output directory contains `index.html`, `graph.html`, `tags.html`, one `.html` page per note and tag, and `style.css`.
 
 ## Build your own notes
 
@@ -37,6 +37,16 @@ Use `[[Note Name]]` anywhere in a note. Links resolve case-insensitively against
 The first level-one heading, such as `# Garden Ideas`, becomes the note title. Notes without a level-one heading use their filename without `.md` as their title.
 
 If no matching note exists, Kokedama keeps the label visible as an unresolved, distinctly styled item and continues building the site. Unresolved links do not create backlinks.
+
+## Link graph
+
+`graph.html` is a static, no-JavaScript view of every note and its unique resolved outgoing links. Notes without resolved destinations display `No outgoing links.` Unresolved targets are shown separately and do not appear as graph destinations.
+
+## Tags
+
+Use inline tags such as `#gardening`, `#soil-health`, or `#soil_health`. Tags are case-insensitive, normalized to lowercase, and listed once per note. A tag must start with a letter or number and may contain letters, numbers, hyphens, and underscores. Markdown headings such as `# Heading` are not tags because the `#` is followed by whitespace.
+
+Each note page lists its tags. `tags.html` links to a page for every tag, and each tag page lists all notes carrying that tag.
 
 ## Verification
 

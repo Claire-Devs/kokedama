@@ -38,6 +38,22 @@ section {
   padding-top: 1.25rem;
 }
 
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  list-style: none;
+  padding: 0;
+}
+
+.tags li {
+  background: #e5f0e6;
+  border-radius: 999px;
+  font-family: system-ui, sans-serif;
+  font-size: 0.9rem;
+  padding: 0.15rem 0.6rem;
+}
+
 .unresolved {
   background: #fff0db;
   border-bottom: 2px dotted #9b4b00;
