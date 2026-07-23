@@ -218,6 +218,95 @@ async function readNotes(notesDirectory) {
   return renderNotePages(preparedNotes);
 }
 
+function renderIndexPage(notes) {
+  const items = notes
+    .map(
+      (note) =>
+        `          <li><a href="${escapeHtml(note.outputFilename)}">${escapeHtml(note.title)}</a></li>`,
+    )
+    .join("\n");
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>All notes</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <main>
+      <h1>All notes</h1>
+      <ul>
+${items}
+      </ul>
+    </main>
+  </body>
+</html>
+`;
+}
+
+async function clearGeneratedFiles(outputDirectory) {
+  let entries;
+  try {
+    entries = await fs.readdir(outputDirectory, { withFileTypes: true });
+  } catch (error) {
+    throw new Error(`Could not inspect output directory "${outputDirectory}": ${error.message}`);
+  }
+
+  const generatedFiles = entries.filter(
+    (entry) => entry.isFile() && (entry.name.endsWith(".html") || entry.name === "style.css"),
+  );
+
+  try {
+    await Promise.all(generatedFiles.map((entry) => fs.unlink(path.join(outputDirectory, entry.name))));
+  } catch (error) {
+    throw new Error(`Could not clear generated files from "${outputDirectory}": ${error.message}`);
+  }
+}
+
+async function writeSite(notes, outputDirectory, stylesheetPath = path.join(__dirname, "templates", "style.css")) {
+  const resolvedOutputDirectory = path.resolve(outputDirectory);
+
+  try {
+    await fs.mkdir(resolvedOutputDirectory, { recursive: true });
+  } catch (error) {
+    throw new Error(`Could not create output directory "${outputDirectory}": ${error.message}`);
+  }
+
+  await clearGeneratedFiles(resolvedOutputDirectory);
+
+  let stylesheet;
+  try {
+    stylesheet = await fs.readFile(stylesheetPath, "utf8");
+  } catch (error) {
+    throw new Error(`Could not read stylesheet "${stylesheetPath}": ${error.message}`);
+  }
+
+  const files = [
+    ...notes.map((note) => ({
+      path: path.join(resolvedOutputDirectory, note.outputFilename),
+      content: note.renderedPage,
+    })),
+    {
+      path: path.join(resolvedOutputDirectory, "index.html"),
+      content: renderIndexPage(notes),
+    },
+    {
+      path: path.join(resolvedOutputDirectory, "style.css"),
+      content: stylesheet,
+    },
+  ];
+
+  try {
+    await Promise.all(files.map((file) => fs.writeFile(file.path, file.content, "utf8")));
+  } catch (error) {
+    throw new Error(`Could not write site files to "${outputDirectory}": ${error.message}`);
+  }
+
+  return resolvedOutputDirectory;
+}
+
 async function main() {
   const [, , notesDirectory, outputDirectory] = process.argv;
 
@@ -228,7 +317,8 @@ async function main() {
   }
 
   const notes = await readNotes(notesDirectory);
-  console.log(JSON.stringify(notes, null, 2));
+  const resolvedOutputDirectory = await writeSite(notes, outputDirectory);
+  console.log(`Generated ${notes.length} notes in ${resolvedOutputDirectory}`);
 }
 
 if (require.main === module) {
@@ -252,4 +342,7 @@ module.exports = {
   renderNotePages,
   renderNoteBodies,
   renderNoteBody,
+  renderIndexPage,
+  clearGeneratedFiles,
+  writeSite,
 };
