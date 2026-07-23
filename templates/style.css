@@ -140,3 +140,35 @@ input[type="search"] {
   color: var(--unresolved-text);
   padding: 0 0.15em;
 }
+
+.visual-graph {
+  border: 1px solid var(--border);
+  display: block;
+  height: auto;
+  max-width: 100%;
+  width: 100%;
+}
+
+.visual-graph-edge {
+  stroke: var(--border);
+  stroke-width: 2;
+}
+
+.visual-graph-node circle {
+  fill: var(--surface);
+  stroke: var(--link);
+  stroke-width: 2;
+}
+
+.visual-graph-node text {
+  fill: var(--text);
+  font-family: system-ui, sans-serif;
+  font-size: 14px;
+}
+
+.visual-graph-node:focus circle,
+.visual-graph-node:hover circle {
+  fill: var(--link);
+  stroke: var(--link-hover);
+  stroke-width: 4;
+}

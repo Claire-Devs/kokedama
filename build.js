@@ -25,6 +25,48 @@ const THEME_TOGGLE_SCRIPT = `<script>(function () {
     updateButton();
   });
 })();</script>`;
+const VISUAL_GRAPH_SCRIPT = `<script>
+  (() => {
+    const graph = JSON.parse(document.getElementById("visual-graph-data").textContent);
+    const svg = document.getElementById("visual-graph");
+    const namespace = "http://www.w3.org/2000/svg";
+    const size = 800;
+    const center = size / 2;
+    const positions = new Map();
+    let index = 0;
+    let ring = 1;
+    while (index < graph.nodes.length) {
+      const capacity = ring * 12;
+      const count = Math.min(capacity, graph.nodes.length - index);
+      const radius = Math.min(330, 55 + ring * 70);
+      for (let position = 0; position < count; position += 1) {
+        const angle = (Math.PI * 2 * position / count) - Math.PI / 2;
+        positions.set(graph.nodes[index].outputFilename, { x: center + radius * Math.cos(angle), y: center + radius * Math.sin(angle) });
+        index += 1;
+      }
+      ring += 1;
+    }
+    function element(name, attributes) {
+      const child = document.createElementNS(namespace, name);
+      for (const [key, value] of Object.entries(attributes)) child.setAttribute(key, value);
+      return child;
+    }
+    for (const edge of graph.edges) {
+      const source = positions.get(edge.source);
+      const target = positions.get(edge.target);
+      if (source && target) svg.append(element("line", { class: "visual-graph-edge", x1: source.x, y1: source.y, x2: target.x, y2: target.y }));
+    }
+    for (const node of graph.nodes) {
+      const position = positions.get(node.outputFilename);
+      const link = element("a", { href: node.outputFilename, class: "visual-graph-node", "aria-label": "Open " + node.title });
+      link.append(element("circle", { cx: position.x, cy: position.y, r: 18 }));
+      const label = element("text", { x: position.x, y: position.y + 34, "text-anchor": "middle" });
+      label.textContent = node.title;
+      link.append(label);
+      svg.append(link);
+    }
+  })();
+</script>`;
 
 function outputStem(title) {
   const safeStem = title
@@ -328,7 +370,7 @@ function renderIndexPage(notes) {
   <body>
     <main>
       <h1>All notes</h1>
-      <nav aria-label="Site navigation"><a href="graph.html">Link graph</a> <a href="tags.html">Tags</a> <a href="search.html">Search</a> ${THEME_TOGGLE}</nav>
+      <nav aria-label="Site navigation"><a href="graph.html">Link graph</a> <a href="visual-graph.html">Visual graph</a> <a href="tags.html">Tags</a> <a href="search.html">Search</a> ${THEME_TOGGLE}</nav>
       <ul>
 ${items}
       </ul>
@@ -368,13 +410,52 @@ function renderGraphPage(notes) {
   </head>
   <body>
     <main>
-      <nav aria-label="Site navigation"><a href="index.html">All notes</a> <a href="tags.html">Tags</a> <a href="search.html">Search</a> ${THEME_TOGGLE}</nav>
+      <nav aria-label="Site navigation"><a href="index.html">All notes</a> <a href="visual-graph.html">Visual graph</a> <a href="tags.html">Tags</a> <a href="search.html">Search</a> ${THEME_TOGGLE}</nav>
       <h1>Link graph</h1>
       <p>Resolved outgoing links for each note.</p>
       <ul class="link-graph">
 ${graphItems}
       </ul>
     </main>
+    ${THEME_TOGGLE_SCRIPT}
+  </body>
+</html>
+`;
+}
+
+function buildVisualGraphData(notes) {
+  const lookup = buildNoteLookup(notes);
+  const nodes = notes.map((note) => ({ title: note.title, outputFilename: note.outputFilename }));
+  const edges = notes.flatMap((note) => resolveOutgoingLinks(note, lookup).resolved.map((target) => ({
+    source: note.outputFilename,
+    target: target.outputFilename,
+  })));
+
+  return { nodes, edges };
+}
+
+function renderVisualGraphPage(notes) {
+  const graphData = serializePageData(buildVisualGraphData(notes));
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Visual graph</title>
+    ${THEME_HEAD_SCRIPT}
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <main>
+      <nav aria-label="Site navigation"><a href="index.html">All notes</a> <a href="graph.html">Link graph</a> <a href="tags.html">Tags</a> <a href="search.html">Search</a> ${THEME_TOGGLE}</nav>
+      <h1>Visual graph</h1>
+      <p>Each circle is a note. Follow a node with the keyboard or pointer to open that note.</p>
+      <svg id="visual-graph" class="visual-graph" viewBox="0 0 800 800" role="group" aria-label="Interactive graph of notes and their resolved links"></svg>
+      <noscript><p>This interactive graph requires JavaScript. Use the <a href="graph.html">Link graph</a> for the complete static view.</p></noscript>
+    </main>
+    <script id="visual-graph-data" type="application/json">${graphData}</script>
+    ${VISUAL_GRAPH_SCRIPT}
     ${THEME_TOGGLE_SCRIPT}
   </body>
 </html>
@@ -398,7 +479,7 @@ function renderTagIndexPage(tagIndex) {
   </head>
   <body>
     <main>
-      <nav aria-label="Site navigation"><a href="index.html">All notes</a> <a href="graph.html">Link graph</a> <a href="search.html">Search</a> ${THEME_TOGGLE}</nav>
+      <nav aria-label="Site navigation"><a href="index.html">All notes</a> <a href="graph.html">Link graph</a> <a href="visual-graph.html">Visual graph</a> <a href="search.html">Search</a> ${THEME_TOGGLE}</nav>
       <h1>Tags</h1>
       <ul>
 ${contents}
@@ -426,7 +507,7 @@ function renderTagPage(tag, notes) {
   </head>
   <body>
     <main>
-      <nav aria-label="Site navigation"><a href="index.html">All notes</a> <a href="graph.html">Link graph</a> <a href="tags.html">Tags</a> <a href="search.html">Search</a> ${THEME_TOGGLE}</nav>
+      <nav aria-label="Site navigation"><a href="index.html">All notes</a> <a href="graph.html">Link graph</a> <a href="visual-graph.html">Visual graph</a> <a href="tags.html">Tags</a> <a href="search.html">Search</a> ${THEME_TOGGLE}</nav>
       <h1>#${escapeHtml(tag)}</h1>
       <ul>
 ${items}
@@ -447,8 +528,12 @@ function buildSearchData(notes) {
 }
 
 function serializeSearchData(notes) {
-  // Escape script-significant characters so note content cannot close the data script element.
-  return JSON.stringify(buildSearchData(notes))
+  return serializePageData(buildSearchData(notes));
+}
+
+function serializePageData(data) {
+  // Escape script-significant characters so generated data cannot close its script element.
+  return JSON.stringify(data)
     .replace(/</g, "\\u003c")
     .replace(/>/g, "\\u003e")
     .replace(/&/g, "\\u0026")
@@ -477,7 +562,7 @@ function renderSearchPage(notes) {
   </head>
   <body>
     <main>
-      <nav aria-label="Site navigation"><a href="index.html">All notes</a> <a href="graph.html">Link graph</a> <a href="tags.html">Tags</a> ${THEME_TOGGLE}</nav>
+      <nav aria-label="Site navigation"><a href="index.html">All notes</a> <a href="graph.html">Link graph</a> <a href="visual-graph.html">Visual graph</a> <a href="tags.html">Tags</a> ${THEME_TOGGLE}</nav>
       <h1>Search notes</h1>
       <form role="search">
         <label for="search-query">Search titles and note content</label>
@@ -578,6 +663,10 @@ async function writeSite(notes, outputDirectory, stylesheetPath = path.join(__di
     {
       path: path.join(resolvedOutputDirectory, "graph.html"),
       content: renderGraphPage(notes),
+    },
+    {
+      path: path.join(resolvedOutputDirectory, "visual-graph.html"),
+      content: renderVisualGraphPage(notes),
     },
     {
       path: path.join(resolvedOutputDirectory, "tags.html"),
@@ -726,11 +815,14 @@ module.exports = {
   renderNoteBody,
   resolveOutgoingLinks,
   renderGraphPage,
+  buildVisualGraphData,
+  renderVisualGraphPage,
   renderIndexPage,
   buildSearchData,
   renderSearchPage,
   renderSearchResults,
   serializeSearchData,
+  serializePageData,
   renderTagIndexPage,
   renderTagPage,
   renderTags,

@@ -8,11 +8,13 @@ const test = require("node:test");
 const {
   assignOutputFilenames,
   computeBacklinks,
+  buildVisualGraphData,
   extractTags,
   parseNote,
   parseCliArguments,
   readNotes,
   renderGraphPage,
+  renderVisualGraphPage,
   renderSearchPage,
   renderTagIndexPage,
   renderTagPage,
@@ -150,6 +152,30 @@ test("renders a static graph with resolved links, unresolved labels, and empty s
   assert.match(graph, /href="index\.html">All notes/);
 });
 
+test("renders an interactive graph from resolved links with an accessible static fallback", () => {
+  const source = parseNote("source.md", "/notes/source.md", "# Source\n\n[[Target]] [[Target]] [[Missing]]");
+  const target = parseNote("target.md", "/notes/target.md", "# Target\n\nContent");
+  const notes = assignOutputFilenames([source, target]);
+  const graphData = buildVisualGraphData(notes);
+  const graph = renderVisualGraphPage(notes);
+
+  assert.deepEqual(graphData, {
+    nodes: [
+      { title: "Source", outputFilename: "source.html" },
+      { title: "Target", outputFilename: "target.html" },
+    ],
+    edges: [{ source: "source.html", target: "target.html" }],
+  });
+  assert.match(graph, /id="visual-graph"/);
+  assert.match(graph, /class: "visual-graph-node"/);
+  assert.match(graph, /href: node\.outputFilename/);
+  assert.match(graph, /Open " \+ node\.title/);
+  assert.match(graph, /This interactive graph requires JavaScript/);
+  assert.match(graph, /href="graph\.html">Link graph/);
+  assert.match(graph, /"source":"source\.html","target":"target\.html"/);
+  assert.doesNotMatch(graph, /Missing/);
+});
+
 test("generates safe, deterministic output filenames for collisions", () => {
   const notes = [
     { title: "A / Note" },
@@ -181,6 +207,7 @@ test("removes stale generated pages without removing unrelated output files", as
   assert.equal(await fs.readFile(path.join(outputDirectory, "keep.txt"), "utf8"), "keep");
   await fs.access(path.join(outputDirectory, "fresh.html"));
   await fs.access(path.join(outputDirectory, "graph.html"));
+  await fs.access(path.join(outputDirectory, "visual-graph.html"));
   await fs.access(path.join(outputDirectory, "tags.html"));
   await fs.access(path.join(outputDirectory, "search.html"));
 });
@@ -228,7 +255,7 @@ test("generates a system-aware persistent theme toggle on every page type", asyn
 
   await writeSite(await readNotes(notesDirectory), outputDirectory);
 
-  for (const filename of ["first.html", "index.html", "graph.html", "tags.html", "tag-garden.html", "search.html"]) {
+  for (const filename of ["first.html", "index.html", "graph.html", "visual-graph.html", "tags.html", "tag-garden.html", "search.html"]) {
     const page = await fs.readFile(path.join(outputDirectory, filename), "utf8");
     assert.match(page, /localStorage\.getItem\("kokedama-theme"\)/);
     assert.match(page, /class="theme-toggle"/);
@@ -240,6 +267,20 @@ test("generates a system-aware persistent theme toggle on every page type", asyn
   assert.match(stylesheet, /:root\[data-theme="light"\]/);
   assert.match(stylesheet, /:root\[data-theme="dark"\]/);
   assert.match(stylesheet, /\.unresolved[\s\S]*var\(--unresolved-background\)/);
+});
+
+test("generates a compact visual graph for a larger vault", () => {
+  const notes = Array.from({ length: 100 }, (_, index) => parseNote(
+    `note-${index}.md`,
+    `/notes/note-${index}.md`,
+    `# Note ${index}\n\n${index === 0 ? "" : `[[Note ${index - 1}]]`}`,
+  ));
+  assignOutputFilenames(notes);
+  const graph = renderVisualGraphPage(notes);
+
+  assert.equal(buildVisualGraphData(notes).nodes.length, 100);
+  assert.equal(buildVisualGraphData(notes).edges.length, 99);
+  assert.ok(Buffer.byteLength(graph) < 100_000);
 });
 
 test("supports paths containing spaces and reports understandable CLI errors", async () => {

@@ -18,7 +18,7 @@ npm install
 node build.js ./sample-notes ./dist
 ```
 
-Open `dist/index.html` directly in a browser. The output directory contains `index.html`, `graph.html`, `tags.html`, `search.html`, one `.html` page per note and tag, and `style.css`.
+Open `dist/index.html` directly in a browser. The output directory contains `index.html`, `graph.html`, `visual-graph.html`, `tags.html`, `search.html`, one `.html` page per note and tag, and `style.css`.
 
 ## Build your own notes
 
@@ -55,6 +55,8 @@ If no matching note exists, Kokedama keeps the label visible as an unresolved, d
 ## Link graph
 
 `graph.html` is a static, no-JavaScript view of every note and its unique resolved outgoing links. Notes without resolved destinations display `No outgoing links.` Unresolved targets are shown separately and do not appear as graph destinations.
+
+`visual-graph.html` is a JavaScript-enhanced SVG view of the same resolved links. Its keyboard-focusable nodes open note pages. The static link graph remains available as its no-JavaScript fallback.
 
 ## Tags
 
