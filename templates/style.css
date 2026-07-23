@@ -1,5 +1,61 @@
+:root {
+  color-scheme: light dark;
+  --background: #fffdf8;
+  --border: #bfd1c1;
+  --heading: #173521;
+  --link: #176b4a;
+  --link-hover: #0c4931;
+  --surface: #e5f0e6;
+  --text: #243326;
+  --unresolved-background: #fff0db;
+  --unresolved-border: #9b4b00;
+  --unresolved-text: #7a3900;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #172019;
+    --border: #4e6c55;
+    --heading: #d1ead5;
+    --link: #8fd4a5;
+    --link-hover: #c2f2ce;
+    --surface: #294231;
+    --text: #e4eee5;
+    --unresolved-background: #4a2d11;
+    --unresolved-border: #f2ad61;
+    --unresolved-text: #ffcf9a;
+  }
+}
+
+:root[data-theme="light"] {
+  --background: #fffdf8;
+  --border: #bfd1c1;
+  --heading: #173521;
+  --link: #176b4a;
+  --link-hover: #0c4931;
+  --surface: #e5f0e6;
+  --text: #243326;
+  --unresolved-background: #fff0db;
+  --unresolved-border: #9b4b00;
+  --unresolved-text: #7a3900;
+}
+
+:root[data-theme="dark"] {
+  --background: #172019;
+  --border: #4e6c55;
+  --heading: #d1ead5;
+  --link: #8fd4a5;
+  --link-hover: #c2f2ce;
+  --surface: #294231;
+  --text: #e4eee5;
+  --unresolved-background: #4a2d11;
+  --unresolved-border: #f2ad61;
+  --unresolved-text: #ffcf9a;
+}
+
 body {
-  color: #243326;
+  background: var(--background);
+  color: var(--text);
   font-family: Georgia, "Times New Roman", serif;
   line-height: 1.6;
   margin: 3rem auto;
@@ -8,11 +64,11 @@ body {
 }
 
 a {
-  color: #176b4a;
+  color: var(--link);
 }
 
 a:hover {
-  color: #0c4931;
+  color: var(--link-hover);
 }
 
 nav {
@@ -21,9 +77,24 @@ nav {
   margin-bottom: 2.5rem;
 }
 
+.theme-toggle {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  margin-left: 0.5rem;
+  padding: 0.2rem 0.45rem;
+}
+
+.theme-toggle:hover {
+  border-color: var(--link);
+}
+
 h1,
 h2 {
-  color: #173521;
+  color: var(--heading);
   line-height: 1.2;
 }
 
@@ -33,7 +104,7 @@ h1 {
 }
 
 section {
-  border-top: 1px solid #bfd1c1;
+  border-top: 1px solid var(--border);
   margin-top: 3rem;
   padding-top: 1.25rem;
 }
@@ -47,7 +118,7 @@ section {
 }
 
 .tags li {
-  background: #e5f0e6;
+  background: var(--surface);
   border-radius: 999px;
   font-family: system-ui, sans-serif;
   font-size: 0.9rem;
@@ -64,8 +135,8 @@ input[type="search"] {
 }
 
 .unresolved {
-  background: #fff0db;
-  border-bottom: 2px dotted #9b4b00;
-  color: #7a3900;
+  background: var(--unresolved-background);
+  border-bottom: 2px dotted var(--unresolved-border);
+  color: var(--unresolved-text);
   padding: 0 0.15em;
 }

@@ -30,6 +30,20 @@ node build.js "/path/to/my notes" ./my-garden
 
 Kokedama reads only top-level Markdown files and recreates its generated HTML and stylesheet files on each build, so removed notes do not leave stale pages behind. Other files in the output directory are left untouched.
 
+## Watch mode
+
+To rebuild automatically after top-level Markdown notes are added, edited, or deleted, run:
+
+```bash
+node build.js --watch ./sample-notes ./dist
+```
+
+Kokedama completes one full build before it starts watching. Filesystem events are briefly debounced, and a failed rebuild is reported without stopping watch mode.
+
+## Themes
+
+Pages follow the operating system light or dark preference by default. The `Toggle theme` button stores an explicit choice in the browser, while pages remain readable with JavaScript disabled.
+
 ## Wikilinks and titles
 
 Use `[[Note Name]]` anywhere in a note. Links resolve case-insensitively against both a note's title and its source filename without the `.md` extension. For example, `[[Garden Ideas]]` and `[[garden-ideas]]` can both resolve to `garden-ideas.md` when its title is `Garden Ideas`.

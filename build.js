@@ -1,12 +1,30 @@
 #!/usr/bin/env node
 
 const fs = require("node:fs/promises");
+const fsSync = require("node:fs");
 const path = require("node:path");
 const { marked } = require("marked");
 
 const WIKILINK_PATTERN = /\[\[([^\]]+)\]\]/g;
 const LEVEL_ONE_HEADING_PATTERN = /^(?: {0,3})#\s+(.+?)(?:\s+#+)?\s*$/m;
 const TAG_PATTERN = /(?:^|[^a-z0-9_/-])#([a-z0-9][a-z0-9_-]*)\b/gi;
+const WATCH_DEBOUNCE_MS = 100;
+const THEME_HEAD_SCRIPT = `<script>(function () { try { var theme = localStorage.getItem("kokedama-theme"); if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme; } catch (error) {} })();</script>`;
+const THEME_TOGGLE = `<button class="theme-toggle" type="button" aria-label="Toggle color theme" aria-pressed="false">Toggle theme</button>`;
+const THEME_TOGGLE_SCRIPT = `<script>(function () {
+  var button = document.querySelector(".theme-toggle");
+  if (!button) return;
+  var prefersDark = window.matchMedia("(prefers-color-scheme: dark)");
+  function currentTheme() { return document.documentElement.dataset.theme || (prefersDark.matches ? "dark" : "light"); }
+  function updateButton() { button.setAttribute("aria-pressed", String(currentTheme() === "dark")); }
+  updateButton();
+  button.addEventListener("click", function () {
+    var theme = currentTheme() === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = theme;
+    try { localStorage.setItem("kokedama-theme", theme); } catch (error) {}
+    updateButton();
+  });
+})();</script>`;
 
 function outputStem(title) {
   const safeStem = title
@@ -229,7 +247,10 @@ function renderNotePage(note, template) {
     .replace(/{{title}}/g, escapeHtml(note.title))
     .replace("{{content}}", note.renderedBody)
     .replace("{{tags}}", renderTags(note.tags))
-    .replace("{{backlinks}}", renderBacklinks(note.backlinks));
+    .replace("{{backlinks}}", renderBacklinks(note.backlinks))
+    .replace("{{themeHead}}", THEME_HEAD_SCRIPT)
+    .replace("{{themeToggle}}", THEME_TOGGLE)
+    .replace("{{themeToggleScript}}", THEME_TOGGLE_SCRIPT);
 }
 
 async function renderNotePages(notes, templatePath = path.join(__dirname, "templates", "page.html")) {
@@ -301,16 +322,18 @@ function renderIndexPage(notes) {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>All notes</title>
+    ${THEME_HEAD_SCRIPT}
     <link rel="stylesheet" href="style.css">
   </head>
   <body>
     <main>
       <h1>All notes</h1>
-      <nav aria-label="Site navigation"><a href="graph.html">Link graph</a> <a href="tags.html">Tags</a> <a href="search.html">Search</a></nav>
+      <nav aria-label="Site navigation"><a href="graph.html">Link graph</a> <a href="tags.html">Tags</a> <a href="search.html">Search</a> ${THEME_TOGGLE}</nav>
       <ul>
 ${items}
       </ul>
     </main>
+    ${THEME_TOGGLE_SCRIPT}
   </body>
 </html>
 `;
@@ -340,17 +363,19 @@ function renderGraphPage(notes) {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Link graph</title>
+    ${THEME_HEAD_SCRIPT}
     <link rel="stylesheet" href="style.css">
   </head>
   <body>
     <main>
-      <nav aria-label="Site navigation"><a href="index.html">All notes</a> <a href="tags.html">Tags</a> <a href="search.html">Search</a></nav>
+      <nav aria-label="Site navigation"><a href="index.html">All notes</a> <a href="tags.html">Tags</a> <a href="search.html">Search</a> ${THEME_TOGGLE}</nav>
       <h1>Link graph</h1>
       <p>Resolved outgoing links for each note.</p>
       <ul class="link-graph">
 ${graphItems}
       </ul>
     </main>
+    ${THEME_TOGGLE_SCRIPT}
   </body>
 </html>
 `;
@@ -368,16 +393,18 @@ function renderTagIndexPage(tagIndex) {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Tags</title>
+    ${THEME_HEAD_SCRIPT}
     <link rel="stylesheet" href="style.css">
   </head>
   <body>
     <main>
-      <nav aria-label="Site navigation"><a href="index.html">All notes</a> <a href="graph.html">Link graph</a> <a href="search.html">Search</a></nav>
+      <nav aria-label="Site navigation"><a href="index.html">All notes</a> <a href="graph.html">Link graph</a> <a href="search.html">Search</a> ${THEME_TOGGLE}</nav>
       <h1>Tags</h1>
       <ul>
 ${contents}
       </ul>
     </main>
+    ${THEME_TOGGLE_SCRIPT}
   </body>
 </html>
 `;
@@ -394,16 +421,18 @@ function renderTagPage(tag, notes) {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>#${escapeHtml(tag)}</title>
+    ${THEME_HEAD_SCRIPT}
     <link rel="stylesheet" href="style.css">
   </head>
   <body>
     <main>
-      <nav aria-label="Site navigation"><a href="index.html">All notes</a> <a href="graph.html">Link graph</a> <a href="tags.html">Tags</a> <a href="search.html">Search</a></nav>
+      <nav aria-label="Site navigation"><a href="index.html">All notes</a> <a href="graph.html">Link graph</a> <a href="tags.html">Tags</a> <a href="search.html">Search</a> ${THEME_TOGGLE}</nav>
       <h1>#${escapeHtml(tag)}</h1>
       <ul>
 ${items}
       </ul>
     </main>
+    ${THEME_TOGGLE_SCRIPT}
   </body>
 </html>
 `;
@@ -443,11 +472,12 @@ function renderSearchPage(notes) {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Search notes</title>
+    ${THEME_HEAD_SCRIPT}
     <link rel="stylesheet" href="style.css">
   </head>
   <body>
     <main>
-      <nav aria-label="Site navigation"><a href="index.html">All notes</a> <a href="graph.html">Link graph</a> <a href="tags.html">Tags</a></nav>
+      <nav aria-label="Site navigation"><a href="index.html">All notes</a> <a href="graph.html">Link graph</a> <a href="tags.html">Tags</a> ${THEME_TOGGLE}</nav>
       <h1>Search notes</h1>
       <form role="search">
         <label for="search-query">Search titles and note content</label>
@@ -491,6 +521,7 @@ ${initialResults}
         });
       })();
     </script>
+    ${THEME_TOGGLE_SCRIPT}
   </body>
 </html>
 `;
@@ -575,18 +606,100 @@ async function writeSite(notes, outputDirectory, stylesheetPath = path.join(__di
   return resolvedOutputDirectory;
 }
 
-async function main() {
-  const [, , notesDirectory, outputDirectory] = process.argv;
+async function buildSite(notesDirectory, outputDirectory) {
+  const notes = await readNotes(notesDirectory);
+  const resolvedOutputDirectory = await writeSite(notes, outputDirectory);
+  console.log(`Generated ${notes.length} notes in ${resolvedOutputDirectory}`);
+}
 
-  if (!notesDirectory || !outputDirectory) {
-    console.error("Usage: node build.js <notes-dir> <output-dir>");
+function parseCliArguments(arguments_) {
+  let watch = false;
+  const positionalArguments = [];
+
+  for (const argument of arguments_) {
+    if (argument === "--watch") {
+      watch = true;
+    } else if (argument.startsWith("--")) {
+      return null;
+    } else {
+      positionalArguments.push(argument);
+    }
+  }
+
+  if (positionalArguments.length !== 2) {
+    return null;
+  }
+
+  return {
+    notesDirectory: positionalArguments[0],
+    outputDirectory: positionalArguments[1],
+    watch,
+  };
+}
+
+function watchNotes(notesDirectory, outputDirectory) {
+  let debounceTimer;
+  let rebuilding = false;
+  let rebuildQueued = false;
+
+  const rebuild = async () => {
+    if (rebuilding) {
+      rebuildQueued = true;
+      return;
+    }
+
+    rebuilding = true;
+    try {
+      await buildSite(notesDirectory, outputDirectory);
+    } catch (error) {
+      // A malformed or temporarily inaccessible note should not stop subsequent rebuilds.
+      console.error(`Kokedama: ${error.message}`);
+    } finally {
+      rebuilding = false;
+      if (rebuildQueued) {
+        rebuildQueued = false;
+        scheduleRebuild();
+      }
+    }
+  };
+
+  const scheduleRebuild = () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(rebuild, WATCH_DEBOUNCE_MS);
+  };
+
+  let watcher;
+  try {
+    watcher = fsSync.watch(notesDirectory, (eventType, filename) => {
+      const changedFilename = filename && filename.toString();
+      if (!changedFilename || changedFilename.endsWith(".md")) {
+        scheduleRebuild();
+      }
+    });
+  } catch (error) {
+    throw new Error(`Could not watch input notes directory "${notesDirectory}": ${error.message}`);
+  }
+
+  watcher.on("error", (error) => {
+    console.error(`Kokedama: Watch error for "${notesDirectory}": ${error.message}`);
+  });
+  console.log(`Watching ${path.resolve(notesDirectory)} for Markdown changes.`);
+  return watcher;
+}
+
+async function main() {
+  const options = parseCliArguments(process.argv.slice(2));
+
+  if (!options) {
+    console.error("Usage: node build.js [--watch] <notes-dir> <output-dir>");
     process.exitCode = 1;
     return;
   }
 
-  const notes = await readNotes(notesDirectory);
-  const resolvedOutputDirectory = await writeSite(notes, outputDirectory);
-  console.log(`Generated ${notes.length} notes in ${resolvedOutputDirectory}`);
+  await buildSite(options.notesDirectory, options.outputDirectory);
+  if (options.watch) {
+    watchNotes(options.notesDirectory, options.outputDirectory);
+  }
 }
 
 if (require.main === module) {
@@ -622,7 +735,10 @@ module.exports = {
   renderTagPage,
   renderTags,
   buildTagIndex,
+  buildSite,
   tagFilename,
   clearGeneratedFiles,
+  parseCliArguments,
+  watchNotes,
   writeSite,
 };

@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
-const { spawnSync } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
 const test = require("node:test");
 
 const {
@@ -10,6 +10,7 @@ const {
   computeBacklinks,
   extractTags,
   parseNote,
+  parseCliArguments,
   readNotes,
   renderGraphPage,
   renderSearchPage,
@@ -23,6 +24,19 @@ async function makeTempDirectory(prefix) {
   return fs.mkdtemp(path.join(os.tmpdir(), prefix));
 }
 
+async function waitFor(check, description, timeout = 3_000) {
+  const deadline = Date.now() + timeout;
+
+  while (Date.now() < deadline) {
+    if (await check()) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+
+  throw new Error(`Timed out waiting for ${description}.`);
+}
+
 test("parses a heading title and falls back to the filename", () => {
   const headingNote = parseNote("heading.md", "/notes/heading.md", "# Display Title\n\nBody");
   const filenameNote = parseNote("filename-title.md", "/notes/filename-title.md", "Body");
@@ -31,6 +45,26 @@ test("parses a heading title and falls back to the filename", () => {
   assert.equal(headingNote.body, "Body");
   assert.equal(filenameNote.title, "filename-title");
   assert.equal(filenameNote.body, "Body");
+});
+
+test("parses the optional watch flag without changing one-shot arguments", () => {
+  assert.deepEqual(parseCliArguments(["notes", "site"]), {
+    notesDirectory: "notes",
+    outputDirectory: "site",
+    watch: false,
+  });
+  assert.deepEqual(parseCliArguments(["--watch", "notes", "site"]), {
+    notesDirectory: "notes",
+    outputDirectory: "site",
+    watch: true,
+  });
+  assert.deepEqual(parseCliArguments(["notes", "site", "--watch"]), {
+    notesDirectory: "notes",
+    outputDirectory: "site",
+    watch: true,
+  });
+  assert.equal(parseCliArguments(["--unknown", "notes", "site"]), null);
+  assert.equal(parseCliArguments(["notes"]), null);
 });
 
 test("resolves title and filename wikilinks case-insensitively and deduplicates backlinks", async () => {
@@ -186,6 +220,28 @@ test("writes navigable tag pages for tagged notes", async () => {
   assert.match(thirdPage, /<p>No tags\.<\/p>/);
 });
 
+test("generates a system-aware persistent theme toggle on every page type", async () => {
+  const notesDirectory = await makeTempDirectory("kokedama-theme-notes-");
+  const outputDirectory = await makeTempDirectory("kokedama-theme-site-");
+  await fs.writeFile(path.join(notesDirectory, "first.md"), "# First\n\n#Garden [[Second]]");
+  await fs.writeFile(path.join(notesDirectory, "second.md"), "# Second\n\n[[Missing]]");
+
+  await writeSite(await readNotes(notesDirectory), outputDirectory);
+
+  for (const filename of ["first.html", "index.html", "graph.html", "tags.html", "tag-garden.html", "search.html"]) {
+    const page = await fs.readFile(path.join(outputDirectory, filename), "utf8");
+    assert.match(page, /localStorage\.getItem\("kokedama-theme"\)/);
+    assert.match(page, /class="theme-toggle"/);
+    assert.match(page, /localStorage\.setItem\("kokedama-theme", theme\)/);
+  }
+
+  const stylesheet = await fs.readFile(path.join(outputDirectory, "style.css"), "utf8");
+  assert.match(stylesheet, /@media \(prefers-color-scheme: dark\)/);
+  assert.match(stylesheet, /:root\[data-theme="light"\]/);
+  assert.match(stylesheet, /:root\[data-theme="dark"\]/);
+  assert.match(stylesheet, /\.unresolved[\s\S]*var\(--unresolved-background\)/);
+});
+
 test("supports paths containing spaces and reports understandable CLI errors", async () => {
   const temporaryDirectory = await makeTempDirectory("kokedama paths ");
   const notesDirectory = path.join(temporaryDirectory, "notes with spaces");
@@ -214,4 +270,54 @@ test("supports paths containing spaces and reports understandable CLI errors", a
   assert.match(invalidInput.stderr, /Input notes directory .* does not exist or is not readable/);
   assert.equal(invalidOutput.status, 1);
   assert.match(invalidOutput.stderr, /Could not create output directory/);
+});
+
+test("watch mode rebuilds after Markdown edits, additions, and deletions", async () => {
+  const notesDirectory = await makeTempDirectory("kokedama-watch-notes-");
+  const outputDirectory = await makeTempDirectory("kokedama-watch-site-");
+  const buildPath = path.join(__dirname, "..", "build.js");
+  await fs.writeFile(path.join(notesDirectory, "first.md"), "# First\n\nInitial content");
+
+  const watcher = spawn(process.execPath, [buildPath, "--watch", notesDirectory, outputDirectory]);
+  let output = "";
+  watcher.stdout.on("data", (chunk) => {
+    output += chunk;
+  });
+  watcher.stderr.on("data", (chunk) => {
+    output += chunk;
+  });
+
+  try {
+    await waitFor(() => output.includes("Watching"), "watch mode to start");
+    await fs.writeFile(path.join(notesDirectory, "first.md"), "# First Updated\n\nEdited content");
+    await waitFor(async () => {
+      try {
+        return (await fs.readFile(path.join(outputDirectory, "first-updated.html"), "utf8")).includes("Edited content");
+      } catch {
+        return false;
+      }
+    }, "edited note output");
+
+    await fs.writeFile(path.join(notesDirectory, "second.md"), "# Second\n\nAdded content");
+    await waitFor(async () => {
+      try {
+        await fs.access(path.join(outputDirectory, "second.html"));
+        return true;
+      } catch {
+        return false;
+      }
+    }, "added note output");
+
+    await fs.unlink(path.join(notesDirectory, "second.md"));
+    await waitFor(async () => {
+      try {
+        await fs.access(path.join(outputDirectory, "second.html"));
+        return false;
+      } catch {
+        return true;
+      }
+    }, "deleted note output cleanup");
+  } finally {
+    watcher.kill();
+  }
 });

@@ -4,11 +4,12 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{title}}</title>
+    {{themeHead}}
     <link rel="stylesheet" href="style.css">
   </head>
   <body>
     <main>
-      <nav aria-label="Site navigation"><a href="index.html">All notes</a> <a href="graph.html">Link graph</a> <a href="tags.html">Tags</a> <a href="search.html">Search</a></nav>
+      <nav aria-label="Site navigation"><a href="index.html">All notes</a> <a href="graph.html">Link graph</a> <a href="tags.html">Tags</a> <a href="search.html">Search</a> {{themeToggle}}</nav>
       <article>
         <h1>{{title}}</h1>
         {{content}}
@@ -22,5 +23,6 @@
         {{backlinks}}
       </section>
     </main>
+    {{themeToggleScript}}
   </body>
 </html>
