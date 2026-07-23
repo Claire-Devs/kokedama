@@ -18,7 +18,7 @@ npm install
 node build.js ./sample-notes ./dist
 ```
 
-Open `dist/index.html` directly in a browser. The output directory contains `index.html`, `graph.html`, `tags.html`, one `.html` page per note and tag, and `style.css`.
+Open `dist/index.html` directly in a browser. The output directory contains `index.html`, `graph.html`, `tags.html`, `search.html`, one `.html` page per note and tag, and `style.css`.
 
 ## Build your own notes
 
@@ -47,6 +47,10 @@ If no matching note exists, Kokedama keeps the label visible as an unresolved, d
 Use inline tags such as `#gardening`, `#soil-health`, or `#soil_health`. Tags are case-insensitive, normalized to lowercase, and listed once per note. A tag must start with a letter or number and may contain letters, numbers, hyphens, and underscores. Markdown headings such as `# Heading` are not tags because the `#` is followed by whitespace.
 
 Each note page lists its tags. `tags.html` links to a page for every tag, and each tag page lists all notes carrying that tag.
+
+## Search
+
+`search.html` filters note titles and Markdown content case-insensitively in the browser. It initially lists all notes, shows a clear no-results message, and remains a navigable complete note list when JavaScript is disabled.
 
 ## Verification
 

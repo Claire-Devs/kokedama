@@ -54,6 +54,15 @@ section {
   padding: 0.15rem 0.6rem;
 }
 
+input[type="search"] {
+  box-sizing: border-box;
+  font: inherit;
+  margin-top: 0.35rem;
+  max-width: 32rem;
+  padding: 0.45rem 0.6rem;
+  width: 100%;
+}
+
 .unresolved {
   background: #fff0db;
   border-bottom: 2px dotted #9b4b00;

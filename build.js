@@ -306,7 +306,7 @@ function renderIndexPage(notes) {
   <body>
     <main>
       <h1>All notes</h1>
-      <nav aria-label="Site navigation"><a href="graph.html">Link graph</a> <a href="tags.html">Tags</a></nav>
+      <nav aria-label="Site navigation"><a href="graph.html">Link graph</a> <a href="tags.html">Tags</a> <a href="search.html">Search</a></nav>
       <ul>
 ${items}
       </ul>
@@ -344,7 +344,7 @@ function renderGraphPage(notes) {
   </head>
   <body>
     <main>
-      <nav aria-label="Site navigation"><a href="index.html">All notes</a> <a href="tags.html">Tags</a></nav>
+      <nav aria-label="Site navigation"><a href="index.html">All notes</a> <a href="tags.html">Tags</a> <a href="search.html">Search</a></nav>
       <h1>Link graph</h1>
       <p>Resolved outgoing links for each note.</p>
       <ul class="link-graph">
@@ -372,7 +372,7 @@ function renderTagIndexPage(tagIndex) {
   </head>
   <body>
     <main>
-      <nav aria-label="Site navigation"><a href="index.html">All notes</a> <a href="graph.html">Link graph</a></nav>
+      <nav aria-label="Site navigation"><a href="index.html">All notes</a> <a href="graph.html">Link graph</a> <a href="search.html">Search</a></nav>
       <h1>Tags</h1>
       <ul>
 ${contents}
@@ -398,12 +398,99 @@ function renderTagPage(tag, notes) {
   </head>
   <body>
     <main>
-      <nav aria-label="Site navigation"><a href="index.html">All notes</a> <a href="graph.html">Link graph</a> <a href="tags.html">Tags</a></nav>
+      <nav aria-label="Site navigation"><a href="index.html">All notes</a> <a href="graph.html">Link graph</a> <a href="tags.html">Tags</a> <a href="search.html">Search</a></nav>
       <h1>#${escapeHtml(tag)}</h1>
       <ul>
 ${items}
       </ul>
     </main>
+  </body>
+</html>
+`;
+}
+
+function buildSearchData(notes) {
+  return notes.map((note) => ({
+    title: note.title,
+    outputFilename: note.outputFilename,
+    text: note.rawMarkdown,
+  }));
+}
+
+function serializeSearchData(notes) {
+  // Escape script-significant characters so note content cannot close the data script element.
+  return JSON.stringify(buildSearchData(notes))
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
+function renderSearchResults(notes) {
+  return notes
+    .map((note) => `          <li><a href="${escapeHtml(note.outputFilename)}">${escapeHtml(note.title)}</a></li>`)
+    .join("\n");
+}
+
+function renderSearchPage(notes) {
+  const searchData = serializeSearchData(notes);
+  const initialResults = renderSearchResults(notes);
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Search notes</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <main>
+      <nav aria-label="Site navigation"><a href="index.html">All notes</a> <a href="graph.html">Link graph</a> <a href="tags.html">Tags</a></nav>
+      <h1>Search notes</h1>
+      <form role="search">
+        <label for="search-query">Search titles and note content</label>
+        <input id="search-query" name="q" type="search" autocomplete="off">
+      </form>
+      <p id="search-status" role="status">Showing all notes.</p>
+      <noscript><p>Search filtering requires JavaScript. All notes are listed below.</p></noscript>
+      <ul id="search-results">
+${initialResults}
+      </ul>
+    </main>
+    <script id="search-data" type="application/json">${searchData}</script>
+    <script>
+      (() => {
+        const notes = JSON.parse(document.getElementById("search-data").textContent);
+        const input = document.getElementById("search-query");
+        const results = document.getElementById("search-results");
+        const status = document.getElementById("search-status");
+
+        function render(matches, query) {
+          results.replaceChildren();
+          for (const note of matches) {
+            const item = document.createElement("li");
+            const link = document.createElement("a");
+            link.href = note.outputFilename;
+            link.textContent = note.title;
+            item.append(link);
+            results.append(item);
+          }
+          status.textContent = query
+            ? matches.length ? "Showing " + matches.length + " matching note" + (matches.length === 1 ? "." : "s.") : "No notes match your search."
+            : "Showing all notes.";
+        }
+
+        input.addEventListener("input", () => {
+          const query = input.value.trim().toLowerCase();
+          const matches = query
+            ? notes.filter((note) => (note.title + " " + note.text).toLowerCase().includes(query))
+            : notes;
+          render(matches, query);
+        });
+      })();
+    </script>
   </body>
 </html>
 `;
@@ -465,6 +552,10 @@ async function writeSite(notes, outputDirectory, stylesheetPath = path.join(__di
       path: path.join(resolvedOutputDirectory, "tags.html"),
       content: renderTagIndexPage(tagIndex),
     },
+    {
+      path: path.join(resolvedOutputDirectory, "search.html"),
+      content: renderSearchPage(notes),
+    },
     ...[...tagIndex.entries()].map(([tag, taggedNotes]) => ({
       path: path.join(resolvedOutputDirectory, tagFilename(tag)),
       content: renderTagPage(tag, taggedNotes),
@@ -523,6 +614,10 @@ module.exports = {
   resolveOutgoingLinks,
   renderGraphPage,
   renderIndexPage,
+  buildSearchData,
+  renderSearchPage,
+  renderSearchResults,
+  serializeSearchData,
   renderTagIndexPage,
   renderTagPage,
   renderTags,
