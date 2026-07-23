@@ -323,7 +323,7 @@ async function main() {
 
 if (require.main === module) {
   main().catch((error) => {
-    console.error(`Sprout: ${error.message}`);
+    console.error(`Kokedama: ${error.message}`);
     process.exitCode = 1;
   });
 }

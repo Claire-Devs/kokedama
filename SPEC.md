@@ -1,4 +1,4 @@
-# Project Spec: Sprout — a digital garden generator
+# Project Spec: Kokedama — a digital garden generator
 
 ## How to use this file
 Save this as `SPEC.md` in your project root, then tell OpenCode: *"Read SPEC.md and build the MVP first, in order. Don't start on stretch goals until the MVP is fully working end-to-end."*
@@ -45,7 +45,7 @@ Include 4-5 small sample `.md` files with a few cross-links in the repo so the w
 
 ## Suggested file structure
 ```
-sprout/
+kokedama/
   build.js
   package.json
   sample-notes/

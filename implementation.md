@@ -1,10 +1,10 @@
-# Sprout Implementation Plan
+# Kokedama Implementation Plan
 
 This document divides `SPEC.md` into ordered implementation batches. Complete and verify each batch before starting the next one. Do not begin any stretch-goal batch until the full MVP release gate passes.
 
 ## Working Rules
 
-- Keep Sprout a Node.js build script, not a web server. Do not add Express or another backend framework.
+- Keep Kokedama a Node.js build script, not a web server. Do not add Express or another backend framework.
 - Use one lightweight Markdown library such as `marked`; do not write a Markdown parser.
 - Generate static HTML and CSS only for the MVP. No client-side framework is needed.
 - Keep changes small and focused on the current batch. Do not refactor working code without a concrete reason.
@@ -16,7 +16,7 @@ This document divides `SPEC.md` into ordered implementation batches. Complete an
 ## Target Structure
 
 ```text
-sprout/
+kokedama/
   build.js
   package.json
   .gitignore
@@ -234,7 +234,7 @@ The generated `dist/` directory is a complete static site that can be opened dir
 3. Test paths containing spaces if the filesystem and command invocation support them.
 4. Ensure errors for invalid input and unwritable output are understandable.
 5. Write `README.md` with:
-   - what Sprout does
+    - what Kokedama does
    - prerequisites and installation
    - the exact sample build command
    - how to point the CLI at a personal notes folder
